@@ -25,7 +25,7 @@ module Ruboty
         req.body = JSON.generate(post_message_data(message))
         https = Net::HTTP.new(url.host, access_port)
         https.use_ssl = true
-        res = https.start {|https| https.request(req) }
+        res = https.start { |https| https.request(req) }
       end
 
       private
@@ -33,7 +33,8 @@ module Ruboty
       def init
         ENV["RUBOTY_NAME"] ||= bot_user_name
         @last_created_at_from = "0"
-        get_messages
+        @last_fetch_message_ids = []
+        set_last_fetch_message_ids(get_messages)
       end
 
       def listen
@@ -48,7 +49,7 @@ module Ruboty
         req = Net::HTTP::Get.new(url.request_uri, headers)
         https = Net::HTTP.new(url.host, access_port)
         https.use_ssl = true
-        res = https.start {|https| https.request(req)}
+        res = https.start { |https| https.request(req) }
         messages = JSON.parse(res.body)["messages"] 
         messages = messages.sort_by { |hash| hash['createdAt'].to_i }
         unless messages.last.nil?
@@ -62,8 +63,12 @@ module Ruboty
       end
 
       def listen_group
-        get_messages.each do |m|
+        messages = get_messages
+        messages.each do |m|
           if m["createdBy"] === bot_user_id
+            next
+          end
+          if @last_fetch_message_ids.include?(m["messageId"])
             next
           end
 
@@ -71,6 +76,14 @@ module Ruboty
           robot.receive(
             body: m["text"]
           )
+        end
+        set_last_fetch_message_ids(messages)
+      end
+
+      def set_last_fetch_message_ids(messages)
+        @last_fetch_message_ids = []
+        messages.each do |m|
+          @last_fetch_message_ids << m["messageId"]
         end
       end
 
